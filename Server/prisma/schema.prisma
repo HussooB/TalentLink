@@ -13,3 +13,184 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+
+//
+// 🔹 AUTH & USERS
+//
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  password    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Email verification
+  isVerified      Boolean  @default(false)  // Email verified or not
+  resetToken       String?                  // Token sent via email for password reset
+  resetTokenExpiry DateTime?                // Expiration date for password reset
+
+  // Relations
+  userTypeId  Int
+  userType    UserType @relation(fields: [userTypeId], references: [id])
+
+  jobSeekerProfile JobSeekerProfile?
+  employerProfile  EmployerProfile?
+  notifications    Notification[]
+}
+
+
+model UserType {
+  id    Int    @id @default(autoincrement())
+  name  String @unique // e.g. "JOB_SEEKER", "EMPLOYER", "ADMIN"
+  users User[]
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relation
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+}
+
+//
+// 🔹 JOB SEEKERS
+//
+model JobSeekerProfile {
+  id        String   @id @default(uuid())
+  fullName  String
+  phone     String?
+  resumeUrl String?
+  skills    String[] // array of strings for simplicity
+  location  String?
+
+  // Relations
+ 
+  userId String  @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  applications JobApplication[]
+  bookmarks    JobBookmark[]
+}
+
+//
+// 🔹 EMPLOYERS
+//
+model EmployerProfile {
+  id          String   @id @default(uuid())
+  companyName String
+  website     String?
+  logoUrl     String?
+  location    String?
+
+  // Relations
+  userId String  @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  jobs   JobPost[]
+  notes  JobApplicationNote[]
+}
+
+//
+// 🔹 JOBS
+//
+model JobIndustry {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+  jobs JobPost[]
+}
+
+model EmploymentType {
+  id   Int    @id @default(autoincrement())
+  name String @unique // e.g. "Full-Time", "Part-Time", "Remote"
+  jobs JobPost[]
+}
+
+model JobPostStatus {
+  id   Int    @id @default(autoincrement())
+  name String @unique // e.g. "OPEN", "CLOSED", "DRAFT"
+  jobs JobPost[]
+}
+
+model JobPost {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  salaryRange String?
+  createdAt   DateTime @default(now())
+
+  // Relations
+  employer   EmployerProfile @relation(fields: [employerId], references: [id])
+  employerId String
+
+  industry   JobIndustry? @relation(fields: [industryId], references: [id])
+  industryId Int?
+
+  typeId   Int
+  type     EmploymentType @relation(fields: [typeId], references: [id])
+
+  statusId Int
+  status   JobPostStatus @relation(fields: [statusId], references: [id])
+
+  applications JobApplication[]
+  bookmarks    JobBookmark[]
+}
+
+//
+// 🔹 APPLICATIONS
+//
+model ApplicationStatus {
+  id   Int    @id @default(autoincrement())
+  name String @unique // e.g. "PENDING", "INTERVIEW", "REJECTED", "HIRED"
+  applications JobApplication[]
+}
+
+model JobApplication {
+  id        String   @id @default(uuid())
+  coverLetter String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  jobSeeker   JobSeekerProfile @relation(fields: [jobSeekerId], references: [id])
+  jobSeekerId String
+
+  jobPost   JobPost @relation(fields: [jobPostId], references: [id])
+  jobPostId String
+
+  statusId Int
+  status   ApplicationStatus @relation(fields: [statusId], references: [id])
+
+  notes JobApplicationNote[]
+}
+
+model JobApplicationNote {
+  id        String   @id @default(uuid())
+  content   String
+  createdAt DateTime @default(now())
+
+  // Relations
+  employer   EmployerProfile @relation(fields: [employerId], references: [id])
+  employerId String
+
+  application   JobApplication @relation(fields: [applicationId], references: [id])
+  applicationId String
+}
+
+//
+// 🔹 BOOKMARKS
+//
+model JobBookmark {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Relations
+  jobSeeker   JobSeekerProfile @relation(fields: [jobSeekerId], references: [id])
+  jobSeekerId String
+
+  jobPost   JobPost @relation(fields: [jobPostId], references: [id])
+  jobPostId String
+}
