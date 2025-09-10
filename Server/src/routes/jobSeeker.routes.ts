@@ -6,11 +6,12 @@ import {
   deleteMyProfile,
 } from "../controllers/jobSeeker.controller.js";
 import { authMiddleware } from "../middlewares/auth.js";
-
+import { validate } from "../middlewares/validate.js";
+import { upsertJobSeekerSchema } from "../utils/schemas/jobSeeker.schema.js";
 const router = Router();
 
 // Job seeker manages their own profile
-router.post("/me", authMiddleware, upsertJobSeeker);
+router.post("/me", authMiddleware, validate(upsertJobSeekerSchema),upsertJobSeeker);
 router.get("/me", authMiddleware, getMyProfile);
 router.delete("/me", authMiddleware, deleteMyProfile);
 
