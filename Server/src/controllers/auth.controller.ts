@@ -4,15 +4,14 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/db.js";
 import { sendEmail } from "../utils/email.js";
-
-// Signup with email verification
+// ✅ Signup with email verification
+// ✅ Signup with email verification (Job Seeker + Employer)
 export const signup = async (req: Request, res: Response) => {
-  const { email, password, userTypeId } = req.body;
+  const { email, password, userTypeId, fullName, role, companyName, website, location } = req.body;
+
   try {
-    // Hash the password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user WITHOUT saving verification token
     const user = await prisma.user.create({
       data: {
         email,
@@ -22,34 +21,59 @@ export const signup = async (req: Request, res: Response) => {
       },
     });
 
-    // Generate email verification token (JWT) with 1 day expiry
+    // Create profile depending on userType
+    const userType = await prisma.userType.findUnique({ where: { id: userTypeId } });
+    if (!userType) return res.status(400).json({ error: "Invalid user type" });
+
+    if (userType.name === "JOB_SEEKER") {
+      await prisma.jobSeekerProfile.create({
+        data: {
+          userId: user.id,
+          fullName: fullName || "", // from req.body
+        },
+      });
+    }
+
+    if (userType.name === "EMPLOYER") {
+      // 1️⃣ Check if company exists
+      let company = await prisma.company.findUnique({ where: { name: companyName } });
+
+      if (!company) {
+        company = await prisma.company.create({
+          data: {
+            name: companyName,
+            website,
+            location,
+            approved: false, // needs admin approval
+          },
+        });
+      }
+
+      // 2️⃣ Create employer profile
+      await prisma.employerProfile.create({
+        data: {
+          userId: user.id,
+          role,
+          companyId: company.id,
+        },
+      });
+    }
+
+    // Send verification email
     const verificationToken = jwt.sign(
       { userId: user.id },
       process.env.JWT_SECRET as string,
       { expiresIn: "1d" }
     );
 
-    // Construct verification link
     const verificationLink = `${process.env.CLIENT_URL}/verify-email?token=${verificationToken}`;
-
-    // Construct email HTML
     const html = `
-      <div style="font-family: Arial, sans-serif; line-height:1.5; color:#333; max-width:600px; margin:auto; padding:20px; border:1px solid #eee; border-radius:8px;">
-        <h2 style="color:#4CAF50;">Welcome to TalentLink 🎉</h2>
-        <p>Hi ${user.email},</p>
-        <p>Thank you for signing up! Click the button below to verify your email:</p>
-        <p style="margin:20px 0;">
-          <a href="${verificationLink}" style="background:#4CAF50; color:white; padding:12px 18px; text-decoration:none; border-radius:6px;">
-            Verify Email
-          </a>
-        </p>
-        <p>Best regards,<br/>The TalentLink Team</p>
-        <hr/>
-        <small style="color:#777;">This is an automated email. Do not reply.</small>
-      </div>
+      <h2>Welcome to TalentLink 🎉</h2>
+      <p>Hi ${user.email},</p>
+      <p>Click below to verify your email:</p>
+      <a href="${verificationLink}">Verify Email</a>
     `;
 
-    // Send verification email
     await sendEmail(user.email, "Verify Your Email", html);
 
     res.status(201).json({ message: "User created. Please verify your email." });
@@ -59,17 +83,15 @@ export const signup = async (req: Request, res: Response) => {
 };
 
 
-// Email verification
+// ✅ Email verification
 export const verifyEmail = async (req: Request, res: Response) => {
   const { token } = req.query;
 
   try {
     if (!token) return res.status(400).json({ error: "Token is required" });
 
-    // Verify JWT (checks signature & expiry)
     const decoded = jwt.verify(token as string, process.env.JWT_SECRET as string) as any;
 
-    // Update user as verified
     await prisma.user.update({
       where: { id: decoded.userId },
       data: { isVerified: true },
@@ -81,7 +103,7 @@ export const verifyEmail = async (req: Request, res: Response) => {
   }
 };
 
-// Login
+// ✅ Login
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body;
   try {
@@ -102,7 +124,7 @@ export const login = async (req: Request, res: Response) => {
   }
 };
 
-// Request password reset
+// ✅ Request password reset (Forgot password flow)
 export const requestPasswordReset = async (req: Request, res: Response) => {
   const { email } = req.body;
   try {
@@ -127,7 +149,7 @@ export const requestPasswordReset = async (req: Request, res: Response) => {
   }
 };
 
-// Reset password
+// ✅ Reset password
 export const resetPassword = async (req: Request, res: Response) => {
   const { token, newPassword } = req.body;
   try {
@@ -149,5 +171,27 @@ export const resetPassword = async (req: Request, res: Response) => {
     res.json({ message: "Password reset successful" });
   } catch (err: any) {
     res.status(400).json({ error: "Invalid or expired token" });
+  }
+};
+
+// ✅ Change password (while logged in)
+export const changePassword = async (req: Request, res: Response) => {
+  const { oldPassword, newPassword } = req.body;
+  const user = (req as any).user; // this is the whole user object from middleware
+  const userId = user.id;
+
+  try {
+    const isMatch = await bcrypt.compare(oldPassword, user.password!);
+    if (!isMatch) return res.status(400).json({ error: "Old password is incorrect" });
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password: hashedPassword },
+    });
+
+    res.json({ message: "Password changed successfully" });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 };

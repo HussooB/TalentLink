@@ -18,6 +18,9 @@ datasource db {
 //
 // 🔹 AUTH & USERS
 //
+//
+// 🔹 AUTH & USERS
+//
 model User {
   id          String   @id @default(uuid())
   email       String   @unique
@@ -69,7 +72,6 @@ model JobSeekerProfile {
   location  String?
 
   // Relations
- 
   userId String  @unique
   user   User   @relation(fields: [userId], references: [id])
 
@@ -78,22 +80,37 @@ model JobSeekerProfile {
 }
 
 //
+// 🔹 COMPANIES
+//
+model Company {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  website   String?
+  logoUrl   String?
+  location  String?
+  approved  Boolean  @default(false) // admin must approve
+
+  employers EmployerProfile[]
+  jobs      JobPost[]
+}
+
+//
 // 🔹 EMPLOYERS
 //
 model EmployerProfile {
-  id          String   @id @default(uuid())
-  companyName String
-  website     String?
-  logoUrl     String?
-  location    String?
+  id     String @id @default(uuid())
+  role   String? // e.g. "Recruiter", "HR Manager"
 
   // Relations
   userId String  @unique
   user   User   @relation(fields: [userId], references: [id])
 
-  jobs   JobPost[]
-  notes  JobApplicationNote[]
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  notes JobApplicationNote[]
 }
+
 
 //
 // 🔹 JOBS
@@ -122,10 +139,11 @@ model JobPost {
   description String
   salaryRange String?
   createdAt   DateTime @default(now())
+  isVisible   Boolean  @default(true) // false if company not approved
 
   // Relations
-  employer   EmployerProfile @relation(fields: [employerId], references: [id])
-  employerId String
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String
 
   industry   JobIndustry? @relation(fields: [industryId], references: [id])
   industryId Int?
@@ -194,3 +212,4 @@ model JobBookmark {
   jobPost   JobPost @relation(fields: [jobPostId], references: [id])
   jobPostId String
 }
+
